@@ -1,0 +1,3 @@
+### Rename only
+InferencePoolStatusParents->InferencePoolStatusParent
+InferencePoolStatusParentsParentRef->ParentRef

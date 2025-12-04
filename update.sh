@@ -96,8 +96,8 @@ ENUMS=(
 ENUMS_WITH_DEFAULTS=$(printf ",%s" "${ENUMS[@]}")
 ENUMS_WITH_DEFAULTS=${ENUMS_WITH_DEFAULTS:1}
 
-# The task searches for $GATEWAY_API_ENUMS in the environment to get the enum names and their default variants.
-GATEWAY_API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults >> $APIS_DIR/standard/enum_defaults.rs
+# The task searches for $API_ENUMS in the environment to get the enum names and their default variants.
+API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults >> $APIS_DIR/standard/enum_defaults.rs
 echo "mod enum_defaults;" >> $APIS_DIR/standard/mod.rs
 
 GATEWAY_CLASS_CONDITION_CONSTANTS="GatewayClassConditionType=Accepted"
@@ -141,7 +141,7 @@ ENUMS=(
 
 ENUMS_WITH_DEFAULTS=$(printf ",%s" "${ENUMS[@]}")
 ENUMS_WITH_DEFAULTS=${ENUMS_WITH_DEFAULTS:1}
-GATEWAY_API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults >> $APIS_DIR/experimental/enum_defaults.rs
+API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults >> $APIS_DIR/experimental/enum_defaults.rs
 echo "mod enum_defaults;" >> $APIS_DIR/experimental/mod.rs
 
 # GatewayClass conditions vary between standard and experimental
@@ -189,7 +189,7 @@ ENUMS=(
 
 ENUMS_WITH_DEFAULTS=$(printf ",%s" "${ENUMS[@]}")
 ENUMS_WITH_DEFAULTS=${ENUMS_WITH_DEFAULTS:1}
-GATEWAY_API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults > $APIS_DIR/standard/enum_defaults.rs
+API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults > $APIS_DIR/standard/enum_defaults.rs
 
 sed -i '/#\[kube(status = "GrpcRouteStatus")\]/c\#\[kube(status = "RouteStatus")\]' $APIS_DIR/standard/grpcroutes.rs
 sed -i '/#\[kube(status = "HttpRouteStatus")\]/c\#\[kube(status = "RouteStatus")\]' $APIS_DIR/standard/httproutes.rs
@@ -223,7 +223,7 @@ ENUMS=(
 
 ENUMS_WITH_DEFAULTS=$(printf ",%s" "${ENUMS[@]}")
 ENUMS_WITH_DEFAULTS=${ENUMS_WITH_DEFAULTS:1}
-GATEWAY_API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults > $APIS_DIR/experimental/enum_defaults.rs
+API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults > $APIS_DIR/experimental/enum_defaults.rs
 
 sed -i '/#\[kube(status = "GrpcRouteStatus")\]/c\#\[kube(status = "RouteStatus")\]' $APIS_DIR/experimental/grpcroutes.rs
 sed -i '/#\[kube(status = "HttpRouteStatus")\]/c\#\[kube(status = "RouteStatus")\]' $APIS_DIR/experimental/httproutes.rs
@@ -232,9 +232,9 @@ sed -i '/#\[kube(status = "UdpRouteStatus")\]/c\#\[kube(status = "RouteStatus")\
 sed -i '/#\[kube(status = "TcpRouteStatus")\]/c\#\[kube(status = "RouteStatus")\]' $APIS_DIR/experimental/tcproutes.rs
 
 cargo fmt
-echo "API Generation complete"
+echo "Gateway API Generation complete"
 
-echo "Cleaning up temporary files"
+echo "Gateway API Cleaning up temporary files"
 set -x
 rm -f standard_mapped_names_phase_*.txt
 rm -f standard_mapped_types_to_names_phase_*.txt
@@ -243,4 +243,93 @@ rm -f experimental_mapped_types_to_names_phase_*.txt
 rm -f mapped_names.txt
 rm -f mapped_types_to_names.txt
 set +x
-echo "Cleanup complete"
+echo "Gateway API Cleanup complete"
+
+
+# ------------------------------------------------------------------------------
+# Inference Extension
+# ------------------------------------------------------------------------------
+
+echo " **** Inference Extension Processing Starts **** "
+
+INFERENCE_EXT_VERSION="v1.0.2"
+echo "Using Inference Extension version ${INFERENCE_EXT_VERSION}"
+
+INFERENCE_EXT_STANDARD_APIS=(
+    inferencepools
+)
+
+INFERENCE_EXT_EXPERIMENTAL_APIS=(
+    inferencepools
+    inferenceobjectives
+)
+
+mkdir -p $APIS_DIR/standard/extension/inference
+mkdir -p $APIS_DIR/experimental/extension/inference
+
+
+echo "// WARNING! generated file do not edit" > $APIS_DIR/standard/extension/inference/mod.rs
+
+for API in "${INFERENCE_EXT_STANDARD_APIS[@]}"
+do
+    echo "generating inference extension standard api ${API}"
+    curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api-inference-extension/${INFERENCE_EXT_VERSION}/config/crd/bases/inference.networking.k8s.io_${API}.yaml" | kopium --schema=derived --derive=JsonSchema --derive=Default --derive=PartialEq --docs -f - > $APIS_DIR/standard/extension/inference/${API}.rs
+    sed -i 's/pub use kube::CustomResource;/pub use kube_derive::CustomResource;/g' $APIS_DIR/standard/extension/inference/${API}.rs
+    echo "pub mod ${API};" >> $APIS_DIR/standard/extension/inference/mod.rs
+done
+
+# Standard API enums that need a Default trait impl along with their respective default variant.
+ENUMS=(
+    InferencePoolEndpointPickerRefFailureMode=FailOpen
+)
+
+# Create a comma separated string out of $ENUMS.
+ENUMS_WITH_DEFAULTS=$(printf ",%s" "${ENUMS[@]}")
+ENUMS_WITH_DEFAULTS=${ENUMS_WITH_DEFAULTS:1}
+
+# The task searches for $API_ENUMS in the environment to get the enum names and their default variants.
+API_ENUMS=${ENUMS_WITH_DEFAULTS} cargo xtask gen_enum_defaults >> $APIS_DIR/standard/extension/inference/enum_defaults.rs
+echo "mod enum_defaults;" >> $APIS_DIR/standard/extension/inference/mod.rs
+
+EXT_INFERENCE_FAILURE_MODE_CONSTANTS="InferencePoolEndpointPickerRefFailureMode=FailOpen,FailClose"
+
+EXT_INFERENCE_FAILURE_MODE_CONSTANTS=${EXT_INFERENCE_FAILURE_MODE_CONSTANTS} \
+    cargo xtask gen_condition_constants inference >> $APIS_DIR/standard/extension/inference/constants.rs
+echo "pub mod constants;" >> $APIS_DIR/standard/extension/inference/mod.rs
+
+echo "// WARNING! generated file do not edit" > $APIS_DIR/experimental/extension/inference/mod.rs
+
+for API in "${INFERENCE_EXT_EXPERIMENTAL_APIS[@]}"
+do
+    echo "generating inference extension experimental api ${API}"
+    curl -sSL "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api-inference-extension/${INFERENCE_EXT_VERSION}/config/crd/bases/inference.networking.x.k8s.io_${API}.yaml" | kopium --schema=derived --derive=JsonSchema --derive=Default --derive=PartialEq --docs -f - > $APIS_DIR/experimental/extension/inference/${API}.rs
+    sed -i 's/pub use kube::CustomResource;/pub use kube_derive::CustomResource;/g' $APIS_DIR/experimental/extension/inference/${API}.rs
+    echo "pub mod ${API};" >> $APIS_DIR/experimental/extension/inference/mod.rs
+done
+
+
+export RUST_LOG=info
+
+mkdir -p extension/inference/
+
+echo " **** Starting Type Reducer - Collapsing Duplicative Types **** "
+echo " **** Type Reducer - PHASE 1 - First Pass ***** "
+cargo run --manifest-path type-reducer/Cargo.toml -- --apis-dir $APIS_DIR/standard/extension/inference --out-dir $APIS_DIR/standard/extension/inference reduce --previous-pass-derived-type-names ./type-reducer/extension/inference/standard_reduced_types_pass_0.txt --current-pass-substitute-names ./type-reducer/extension/inference/standard_customized_mapped_names.txt
+mv mapped_names.txt extension/inference/standard_extension_inference_mapped_names_phase_1.txt
+mv mapped_types_to_names.txt extension/inference/standard_extension_inference_mapped_types_to_names_phase_1.txt
+echo " **** PHASE 2 ***** "
+cargo run --manifest-path type-reducer/Cargo.toml -- --apis-dir $APIS_DIR/standard/extension/inference --out-dir $APIS_DIR/standard/extension/inference reduce --previous-pass-derived-type-names ./type-reducer/extension/inference/standard_reduced_types_pass_1.txt --current-pass-substitute-names ./type-reducer/extension/inference/standard_customized_mapped_names.txt
+mv mapped_names.txt extension/inference/standard_extension_inference_mapped_names_phase_2.txt
+mv mapped_types_to_names.txt extension/inference/standard_extension_inference_mapped_types_to_names_phase_2.txt
+
+echo " **** RENAMING PHASE ***** "
+cargo run --manifest-path type-reducer/Cargo.toml -- --apis-dir $APIS_DIR/standard/extension/inference --out-dir $APIS_DIR/standard/extension/inference rename --rename-only-substitute-names ./type-reducer/extension/inference/standard_rename_only_mapped_names.txt
+
+cargo fmt
+echo "Inference Extension API Generation complete"
+
+echo "Inference Extension API Cleaning up temporary files"
+set -x
+rm -rf extension/inference/
+set +x
+echo "Inference Extension API Cleanup complete"

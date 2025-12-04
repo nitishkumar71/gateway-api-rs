@@ -7,7 +7,10 @@ fn main() {
 
     match task.as_deref() {
         Some("gen_enum_defaults") => gen_enum_defaults().unwrap(),
-        Some("gen_condition_constants") => gen_condition_constants().unwrap(),
+        Some("gen_condition_constants") => {
+            let extension = env::args().nth(2);
+            gen_condition_constants(extension).unwrap()
+        }
         _ => print_help(),
     }
 }
@@ -24,25 +27,37 @@ gen_constants generates constants used for Conditions
 
 type DynError = Box<dyn std::error::Error>;
 
-fn gen_condition_constants() -> Result<(), DynError> {
-    let gateway_class_condition_types = env::var("GATEWAY_CLASS_CONDITION_CONSTANTS")?;
-    let gateway_class_reason_types = env::var("GATEWAY_CLASS_REASON_CONSTANTS")?;
-    let gateway_condition_types = env::var("GATEWAY_CONDITION_CONSTANTS")?;
-    let gateway_reason_types = env::var("GATEWAY_REASON_CONSTANTS")?;
-    let listener_condition_types = env::var("LISTENER_CONDITION_CONSTANTS")?;
-    let listener_reason_types = env::var("LISTENER_REASON_CONSTANTS")?;
-    let route_condition_types = env::var("ROUTE_CONDITION_CONSTANTS")?;
-    let route_reason_types = env::var("ROUTE_REASON_CONSTANTS")?;
-
+fn gen_condition_constants(extension: Option<String>) -> Result<(), DynError> {
     let mut scope = Scope::new();
-    gen_const_enums(&mut scope, gateway_class_condition_types);
-    gen_const_enums(&mut scope, gateway_class_reason_types);
-    gen_const_enums(&mut scope, gateway_condition_types);
-    gen_const_enums(&mut scope, gateway_reason_types);
-    gen_const_enums(&mut scope, listener_condition_types);
-    gen_const_enums(&mut scope, listener_reason_types);
-    gen_const_enums(&mut scope, route_condition_types);
-    gen_const_enums(&mut scope, route_reason_types);
+    match extension {
+        None => {
+            let gateway_class_condition_types = env::var("GATEWAY_CLASS_CONDITION_CONSTANTS")?;
+            let gateway_class_reason_types = env::var("GATEWAY_CLASS_REASON_CONSTANTS")?;
+            let gateway_condition_types = env::var("GATEWAY_CONDITION_CONSTANTS")?;
+            let gateway_reason_types = env::var("GATEWAY_REASON_CONSTANTS")?;
+            let listener_condition_types = env::var("LISTENER_CONDITION_CONSTANTS")?;
+            let listener_reason_types = env::var("LISTENER_REASON_CONSTANTS")?;
+            let route_condition_types = env::var("ROUTE_CONDITION_CONSTANTS")?;
+            let route_reason_types = env::var("ROUTE_REASON_CONSTANTS")?;
+
+            gen_const_enums(&mut scope, gateway_class_condition_types);
+            gen_const_enums(&mut scope, gateway_class_reason_types);
+            gen_const_enums(&mut scope, gateway_condition_types);
+            gen_const_enums(&mut scope, gateway_reason_types);
+            gen_const_enums(&mut scope, listener_condition_types);
+            gen_const_enums(&mut scope, listener_reason_types);
+            gen_const_enums(&mut scope, route_condition_types);
+            gen_const_enums(&mut scope, route_reason_types);
+        }
+        Some(ext) if ext == "inference" => {
+            let inference_extension_failure_types =
+                env::var("EXT_INFERENCE_FAILURE_MODE_CONSTANTS")?;
+
+            gen_const_enums(&mut scope, inference_extension_failure_types);
+        }
+        _ => println!("Not Supported Extension!"),
+    }
+
     println!("{}", gen_generated_file_warning());
     println!("{}", scope.to_string());
     Ok(())
@@ -81,9 +96,9 @@ fn gen_display_impl(scope: &mut Scope, ty: &str) {
 }
 
 fn gen_enum_defaults() -> Result<(), DynError> {
-    // GATEWAY_API_ENUMS provides the enum names along with their default variant to be used in the
-    // generated Default impl. For eg: GATEWAY_API_ENUMS=enum1=default1,enum2=default2.
-    let gw_api_enums = env::var("GATEWAY_API_ENUMS")?;
+    // API_ENUMS provides the enum names along with their default variant to be used in the
+    // generated Default impl. For eg: API_ENUMS=enum1=default1,enum2=default2.
+    let gw_api_enums = env::var("API_ENUMS")?;
     let enums_with_defaults = get_enums_with_defaults_map(gw_api_enums);
 
     let mut scope = Scope::new();
